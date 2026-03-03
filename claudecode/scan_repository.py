@@ -168,6 +168,8 @@ Please provide detailed findings with:
 5. Detailed description
 6. Remediation recommendations
 
+**返回结果的属性值请使用中文，并且保持格式一致。**
+
 Return your findings in JSON format with the following structure:
 {
   "findings": [

@@ -215,7 +215,7 @@ def main():
         result_file = output_path / f"repo_{repo_part.replace('/', '_')}.json"
 
     with open(result_file, 'w') as f:
-        json.dump(result.to_dict(), f, indent=2)
+        json.dump(result.to_dict(), f, indent=2, ensure_ascii=False)
 
     print(f"\nResult saved to: {result_file}")
 

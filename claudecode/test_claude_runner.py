@@ -323,9 +323,13 @@ class TestSimpleClaudeRunner:
         }
         
         result = runner._extract_security_findings(claude_output)
-        # Should return empty structure since direct format is not supported
-        assert len(result['findings']) == 0
-        assert result['analysis_summary']['review_completed'] is False
+        # Should extract findings from direct format
+        assert len(result['findings']) == 1
+        assert result['findings'][0]['file'] == 'main.py'
+        assert result['findings'][0]['line'] == 20
+        assert result['findings'][0]['severity'] == 'MEDIUM'
+        assert result['analysis_summary']['files_reviewed'] == 3
+        assert result['analysis_summary']['medium_severity'] == 1
     
     def test_extract_security_findings_text_fallback(self):
         """Test that text fallback was removed - only JSON is supported."""
