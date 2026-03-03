@@ -6,7 +6,8 @@ import time
 from dataclasses import dataclass, field
 
 from claudecode.claude_api_client import ClaudeAPIClient
-from claudecode.constants import DEFAULT_CLAUDE_MODEL
+from claudecode.openai_api_client import OpenAIAPIClient
+from claudecode.constants import DEFAULT_CLAUDE_MODEL, DEFAULT_OPENAI_MODEL, DEFAULT_OPENAI_BASE_URL, SUPPORTED_LLM_PROVIDERS
 from claudecode.logger import get_logger
 
 logger = get_logger(__name__)
@@ -17,7 +18,7 @@ class FilterStats:
     """Statistics about the filtering process."""
     total_findings: int = 0
     hard_excluded: int = 0
-    claude_excluded: int = 0
+    llm_excluded: int = 0
     kept_findings: int = 0
     exclusion_breakdown: Dict[str, int] = field(default_factory=dict)
     confidence_scores: List[float] = field(default_factory=list)
@@ -157,42 +158,73 @@ class HardExclusionRules:
 class FindingsFilter:
     """Main filter class for security findings."""
     
-    def __init__(self, 
+    def __init__(self,
                  use_hard_exclusions: bool = True,
-                 use_claude_filtering: bool = True,
+                 use_llm_filtering: bool = True,
+                 use_claude_filtering: Optional[bool] = None,
                  api_key: Optional[str] = None,
-                 model: str = DEFAULT_CLAUDE_MODEL,
+                 model: Optional[str] = None,
+                 llm_provider: str = 'anthropic',
+                 base_url: Optional[str] = None,
                  custom_filtering_instructions: Optional[str] = None):
         """Initialize findings filter.
-        
+
         Args:
             use_hard_exclusions: Whether to apply hard exclusion rules
-            use_claude_filtering: Whether to use Claude API for filtering
-            api_key: Anthropic API key for Claude filtering
-            model: Claude model to use for filtering
+            use_llm_filtering: Whether to use LLM API for filtering
+            use_claude_filtering: Deprecated: use use_llm_filtering instead
+            api_key: API key for LLM filtering (reads from environment if not provided)
+            model: LLM model to use for filtering
+            llm_provider: LLM provider ('anthropic' or 'openai')
+            base_url: Optional base URL for OpenAI-compatible endpoints
             custom_filtering_instructions: Optional custom filtering instructions
         """
         self.use_hard_exclusions = use_hard_exclusions
-        self.use_claude_filtering = use_claude_filtering
+
+        # Handle deprecated use_claude_filtering parameter
+        if use_claude_filtering is not None:
+            logger.warning("use_claude_filtering is deprecated. Use use_llm_filtering instead.")
+            self.use_llm_filtering = use_claude_filtering
+        else:
+            self.use_llm_filtering = use_llm_filtering
+
+        self.llm_provider = llm_provider.lower()
         self.custom_filtering_instructions = custom_filtering_instructions
-        
-        # Initialize Claude client if filtering is enabled
-        self.claude_client = None
-        if self.use_claude_filtering:
+
+        # Validate provider
+        if self.llm_provider not in SUPPORTED_LLM_PROVIDERS:
+            logger.warning(f"Unsupported LLM provider: {self.llm_provider}. Falling back to 'anthropic'.")
+            self.llm_provider = 'anthropic'
+
+        # Initialize LLM client if filtering is enabled
+        self.llm_client = None
+        if self.use_llm_filtering:
             try:
-                self.claude_client = ClaudeAPIClient(
-                    model=model,
-                    api_key=api_key
-                )
+                if self.llm_provider == 'anthropic':
+                    # Initialize Claude client
+                    from claudecode.claude_api_client import ClaudeAPIClient
+                    self.llm_client = ClaudeAPIClient(
+                        model=model or DEFAULT_CLAUDE_MODEL,
+                        api_key=api_key
+                    )
+                elif self.llm_provider == 'openai':
+                    # Initialize OpenAI client
+                    from claudecode.openai_api_client import OpenAIAPIClient
+                    self.llm_client = OpenAIAPIClient(
+                        model=model or DEFAULT_OPENAI_MODEL,
+                        api_key=api_key,
+                        base_url=base_url or DEFAULT_OPENAI_BASE_URL
+                    )
+
                 # Validate API access
-                valid, error = self.claude_client.validate_api_access()
+                valid, error = self.llm_client.validate_api_access()
                 if not valid:
-                    logger.warning(f"Claude API validation failed: {error}")
-                    self.claude_client = None
-                    self.use_claude_filtering = False
+                    logger.warning(f"{self.llm_provider.capitalize()} API validation failed: {error}")
+                    self.llm_client = None
+                    self.use_llm_filtering = False
             except Exception as e:
-                logger.error(f"Failed to initialize Claude client: {str(e)}")
-                self.use_claude_filtering = False
+                logger.error(f"Failed to initialize {self.llm_provider.capitalize()} client: {str(e)}")
+                self.use_llm_filtering = False
     
     def filter_findings(self, 
                        findings: List[Dict[str, Any]],
@@ -252,39 +284,39 @@ class FindingsFilter:
         else:
             findings_after_hard = [(i, f) for i, f in enumerate(findings)]
         
-        # Step 2: Apply Claude API filtering if enabled
-        findings_after_claude = []
-        excluded_claude = []
-        
-        if self.use_claude_filtering and self.claude_client and findings_after_hard:
+        # Step 2: Apply LLM API filtering if enabled
+        findings_after_llm = []
+        excluded_llm = []
+
+        if self.use_llm_filtering and self.llm_client and findings_after_hard:
             # Process findings individually
-            logger.info(f"Processing {len(findings_after_hard)} findings individually through Claude API")
-            
+            logger.info(f"Processing {len(findings_after_hard)} findings individually through {self.llm_provider.capitalize()} API")
+
             for orig_idx, finding in findings_after_hard:
-                # Call Claude API for single finding
-                success, analysis_result, error_msg = self.claude_client.analyze_single_finding(
+                # Call LLM API for single finding
+                success, analysis_result, error_msg = self.llm_client.analyze_single_finding(
                     finding, pr_context, self.custom_filtering_instructions
                 )
                 
                 if success and analysis_result:
-                    # Process Claude's analysis for single finding
+                    # Process LLM's analysis for single finding
                     confidence = analysis_result.get('confidence_score', 10.0)
                     keep_finding = analysis_result.get('keep_finding', True)
                     justification = analysis_result.get('justification', '')
                     exclusion_reason = analysis_result.get('exclusion_reason')
-                    
+
                     stats.confidence_scores.append(confidence)
-                    
+
                     if not keep_finding:
-                        # Claude recommends excluding
-                        excluded_claude.append({
+                        # LLM recommends excluding
+                        excluded_llm.append({
                             "finding": finding,
                             "confidence_score": confidence,
                             "exclusion_reason": exclusion_reason or f"Low confidence score: {confidence}",
                             "justification": justification,
-                            "filter_stage": "claude_api"
+                            "filter_stage": f"{self.llm_provider}_api"
                         })
-                        stats.claude_excluded += 1
+                        stats.llm_excluded += 1
                     else:
                         # Keep finding with metadata
                         enriched_finding = finding.copy()
@@ -292,45 +324,45 @@ class FindingsFilter:
                             'confidence_score': confidence,
                             'justification': justification,
                         }
-                        findings_after_claude.append(enriched_finding)
+                        findings_after_llm.append(enriched_finding)
                         stats.kept_findings += 1
                 else:
-                    # Claude API call failed for this finding - keep it with warning
-                    logger.warning(f"Claude API call failed for finding {orig_idx}: {error_msg}")
+                    # LLM API call failed for this finding - keep it with warning
+                    logger.warning(f"{self.llm_provider.capitalize()} API call failed for finding {orig_idx}: {error_msg}")
                     enriched_finding = finding.copy()
                     enriched_finding['_filter_metadata'] = {
                         'confidence_score': 10.0,  # Default high confidence
-                        'justification': f'Claude API failed: {error_msg}',
+                        'justification': f'{self.llm_provider.capitalize()} API failed: {error_msg}',
                     }
-                    findings_after_claude.append(enriched_finding)
+                    findings_after_llm.append(enriched_finding)
                     stats.kept_findings += 1
         else:
-            # Claude filtering disabled or no client - keep all findings from hard filter
+            # LLM filtering disabled or no client - keep all findings from hard filter
             for orig_idx, finding in findings_after_hard:
                 enriched_finding = finding.copy()
                 enriched_finding['_filter_metadata'] = {
                     'confidence_score': 10.0,  # Default high confidence
-                    'justification': 'Claude filtering disabled',
+                    'justification': f'{self.llm_provider.capitalize()} filtering disabled',
                 }
-                findings_after_claude.append(enriched_finding)
+                findings_after_llm.append(enriched_finding)
                 stats.kept_findings += 1
-        
+
         # Combine all excluded findings
-        all_excluded = excluded_hard + excluded_claude
-        
+        all_excluded = excluded_hard + excluded_llm
+
         # Calculate final statistics
         stats.runtime_seconds = time.time() - start_time
-        
+
         # Build filtered results
         filtered_results = {
-            "filtered_findings": findings_after_claude,
+            "filtered_findings": findings_after_llm,
             "excluded_findings": all_excluded,
             "analysis_summary": {
                 "total_findings": stats.total_findings,
                 "kept_findings": stats.kept_findings,
                 "excluded_findings": len(all_excluded),
                 "hard_excluded": stats.hard_excluded,
-                "claude_excluded": stats.claude_excluded,
+                f"{self.llm_provider}_excluded": stats.llm_excluded,
                 "exclusion_breakdown": stats.exclusion_breakdown,
                 "average_confidence": sum(stats.confidence_scores) / len(stats.confidence_scores) if stats.confidence_scores else None,
                 "runtime_seconds": stats.runtime_seconds

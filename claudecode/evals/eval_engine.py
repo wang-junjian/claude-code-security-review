@@ -70,10 +70,26 @@ class EvaluationEngine:
         Path(self.work_dir).mkdir(parents=True, exist_ok=True)
         
         self.verbose = verbose
-        self.claude_api_key = os.environ.get('ANTHROPIC_API_KEY', '')
-        
-        if not self.claude_api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable required")
+
+        # Get API configuration from environment
+        self.llm_provider = os.environ.get('LLM_PROVIDER', 'anthropic').lower()
+        self.api_key = None
+        self.base_url = None
+        self.model = None
+
+        if self.llm_provider == 'anthropic':
+            self.api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+            if not self.api_key:
+                raise ValueError("ANTHROPIC_API_KEY environment variable required for Anthropic provider")
+            self.model = os.environ.get('CLAUDE_MODEL', 'claude-opus-4-1-20250805')
+        elif self.llm_provider == 'openai':
+            self.api_key = os.environ.get('OPENAI_API_KEY', '')
+            if not self.api_key:
+                raise ValueError("OPENAI_API_KEY environment variable required for OpenAI provider")
+            self.model = os.environ.get('OPENAI_MODEL', 'gpt-4-turbo')
+            self.base_url = os.environ.get('OPENAI_BASE_URL', 'https://api.openai.com/v1')
+        else:
+            raise ValueError(f"Unsupported LLM provider: {self.llm_provider}. Supported providers: anthropic, openai")
         
         # Repository locks for concurrent access
         self._repo_locks: Dict[str, threading.Lock] = {}
@@ -407,7 +423,17 @@ class EvaluationEngine:
         env = os.environ.copy()
         env['GITHUB_REPOSITORY'] = test_case.repo_name
         env['PR_NUMBER'] = str(test_case.pr_number)
-        env['ANTHROPIC_API_KEY'] = self.claude_api_key
+        env['LLM_PROVIDER'] = self.llm_provider
+        if self.llm_provider == 'anthropic':
+            env['ANTHROPIC_API_KEY'] = self.api_key
+            if self.model:
+                env['CLAUDE_MODEL'] = self.model
+        elif self.llm_provider == 'openai':
+            env['OPENAI_API_KEY'] = self.api_key
+            if self.model:
+                env['OPENAI_MODEL'] = self.model
+            if self.base_url:
+                env['OPENAI_BASE_URL'] = self.base_url
         if self.github_token:
             env['GITHUB_TOKEN'] = self.github_token
         env['EVAL_MODE'] = '1'  # Enable eval mode
@@ -464,17 +490,255 @@ class EvaluationEngine:
             self.log(f"Exception during SAST audit: {e}")
             return False, "", None, str(e)
 
+    def _setup_repository_for_scan(self, test_case: EvalCase) -> Tuple[bool, str, str]:
+        """Set up repository for full repository scan.
+
+        Args:
+            test_case: Test case containing repo info
+
+        Returns:
+            Tuple of (success, repo_path, error_message)
+        """
+        repo_name = test_case.repo_name
+
+        # Create base path for this repository
+        safe_repo_name = repo_name.replace('/', '_')
+        repo_path = os.path.join(self.work_dir, safe_repo_name)
+
+        # Get lock for this repository
+        repo_lock = self._get_repo_lock(repo_name)
+
+        with repo_lock:
+            # Clone or update the repository
+            if not os.path.exists(repo_path):
+                self.log(f"Cloning {repo_name} to {repo_path}")
+                clone_url = f"https://github.com/{repo_name}.git"
+                if self.github_token:
+                    clone_url = f"https://{self.github_token}@github.com/{repo_name}.git"
+
+                try:
+                    subprocess.run(['git', 'clone', '--filter=blob:none', clone_url, repo_path],
+                                 check=True, capture_output=True, timeout=TIMEOUT_CLONE)
+                except subprocess.CalledProcessError as e:
+                    error_msg = f"Failed to clone repository: {e.stderr.decode()}"
+                    self.log(error_msg)
+                    return False, "", error_msg
+            else:
+                # Update existing repository
+                self.log(f"Updating {repo_name} at {repo_path}")
+                try:
+                    subprocess.run(['git', '-C', repo_path, 'fetch', 'origin', 'main'],
+                                 check=True, capture_output=True, timeout=TIMEOUT_FETCH)
+                    subprocess.run(['git', '-C', repo_path, 'checkout', 'main'],
+                                 check=True, capture_output=True, timeout=TIMEOUT_SHORT)
+                    subprocess.run(['git', '-C', repo_path, 'reset', '--hard', 'origin/main'],
+                                 check=True, capture_output=True, timeout=TIMEOUT_SHORT)
+                except subprocess.CalledProcessError as e:
+                    error_msg = f"Failed to update repository: {e.stderr.decode()}"
+                    self.log(error_msg)
+                    return False, "", error_msg
+
+            return True, repo_path, ""
+
+    def _cleanup_repository_for_scan(self, test_case: EvalCase, repo_path: str) -> None:
+        """Clean up repository after scan.
+
+        Args:
+            test_case: Test case that was evaluated
+            repo_path: Path to the repository
+        """
+        if not os.path.exists(repo_path):
+            return
+
+        repo_name = test_case.repo_name
+
+        repo_lock = self._get_repo_lock(repo_name)
+
+        with repo_lock:
+            try:
+                # Remove the repository directory
+                shutil.rmtree(repo_path, ignore_errors=True)
+                self.log(f"Cleaned up repository: {repo_path}")
+
+            except Exception as e:
+                self.log(f"Error cleaning up repository: {e}")
+
+    def run_repository_evaluation(self, test_case: EvalCase) -> EvalResult:
+        """Run security evaluation on entire repository.
+
+        Args:
+            test_case: Test case to evaluate
+
+        Returns:
+            EvalResult with evaluation outcome
+        """
+        start_time = time.time()
+        self.log(f"Starting evaluation of entire repository: {test_case.repo_name}")
+
+        # Set up repository
+        success, repo_path, error_msg = self._setup_repository_for_scan(test_case)
+        if not success:
+            return EvalResult(
+                repo_name=test_case.repo_name,
+                pr_number=0,
+                description=test_case.description,
+                success=False,
+                runtime_seconds=time.time() - start_time,
+                findings_count=0,
+                detected_vulnerabilities=False,
+                error_message=f"Repository setup failed: {error_msg}"
+            )
+
+        try:
+            # Run the repository scan
+            self.log(f"Running repository scan on {repo_path}")
+            scan_success, output, parsed_results, error_message = self._run_repository_scan(test_case, repo_path)
+
+            if not scan_success:
+                return EvalResult(
+                    repo_name=test_case.repo_name,
+                    pr_number=0,
+                    description=test_case.description,
+                    success=False,
+                    runtime_seconds=time.time() - start_time,
+                    findings_count=0,
+                    detected_vulnerabilities=False,
+                    error_message=f"Repository scan failed: {error_message or 'Unknown error'}"
+                )
+
+            # Extract findings from results
+            findings = []
+            if parsed_results and 'findings' in parsed_results:
+                findings = parsed_results['findings']
+
+            findings_count = len(findings)
+            detected_vulnerabilities = findings_count > 0
+
+            # Create findings summary
+            findings_summary = []
+            for finding in findings[:10]:  # Limit to first 10 for summary
+                summary_item = {
+                    'file': finding.get('file', finding.get('path', 'unknown')),
+                    'line': finding.get('line', finding.get('start', {}).get('line', 0)),
+                    'severity': finding.get('severity', 'UNKNOWN'),
+                    'title': finding.get('check_id', finding.get('category', 'Unknown')),
+                    'description': finding.get('description', finding.get('message', 'Unknown'))
+                }
+                findings_summary.append(summary_item)
+
+            return EvalResult(
+                repo_name=test_case.repo_name,
+                pr_number=0,
+                description=test_case.description,
+                success=True,
+                runtime_seconds=time.time() - start_time,
+                findings_count=findings_count,
+                detected_vulnerabilities=detected_vulnerabilities,
+                findings_summary=findings_summary,
+                full_findings=findings
+            )
+
+        finally:
+            # Always clean up the repository
+            self._cleanup_repository_for_scan(test_case, repo_path)
+
+    def _run_repository_scan(self, test_case: EvalCase, repo_path: str) -> Tuple[bool, str, Optional[Dict[str, Any]], Optional[str]]:
+        """Run the repository scan script on a repository.
+
+        Args:
+            test_case: Test case being evaluated
+            repo_path: Path to the repository
+
+        Returns:
+            Tuple of (success, output, parsed_results, error_message)
+        """
+        # Prepare environment
+        env = os.environ.copy()
+        env['LLM_PROVIDER'] = self.llm_provider
+        if self.llm_provider == 'anthropic':
+            env['ANTHROPIC_API_KEY'] = self.api_key
+            if self.model:
+                env['CLAUDE_MODEL'] = self.model
+        elif self.llm_provider == 'openai':
+            env['OPENAI_API_KEY'] = self.api_key
+            if self.model:
+                env['OPENAI_MODEL'] = self.model
+            if self.base_url:
+                env['OPENAI_BASE_URL'] = self.base_url
+        if self.github_token:
+            env['GITHUB_TOKEN'] = self.github_token
+        env['EVAL_MODE'] = '1'  # Enable eval mode
+
+        # Run the scan script
+        script_path = Path(__file__).parent.parent / 'scan_repository.py'
+
+        # Add the project root to PYTHONPATH so claudecode module can be imported
+        project_root = script_path.parent.parent
+        if 'PYTHONPATH' in env:
+            env['PYTHONPATH'] = f"{project_root}{os.pathsep}{env['PYTHONPATH']}"
+        else:
+            env['PYTHONPATH'] = str(project_root)
+
+        try:
+            self.log(f"Executing repository scan for {test_case.repo_name}")
+            result = subprocess.run(
+                [sys.executable, str(script_path), repo_path, "--output", "-"],
+                cwd=repo_path,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=TIMEOUT_CLAUDECODE
+            )
+
+            output = result.stdout
+
+            # Parse the JSON output first to see if we got valid results
+            success, parsed_results = parse_json_with_fallbacks(output)
+            if not success:
+                self.log("Failed to parse repository scan output as JSON")
+                # If we can't parse JSON and have non-zero exit code, it's a real failure
+                if result.returncode != 0:
+                    error_output = result.stderr or output
+                    self.log(f"Repository scan failed with return code {result.returncode}")
+                    self.log(f"Error output: {error_output[:500]}...")
+                    return False, output, None, f"Exit code {result.returncode}: {error_output[:200]}"
+                return False, output, None, "Invalid JSON output"
+
+            return True, output, parsed_results, None
+
+        except subprocess.TimeoutExpired:
+            self.log(f"Repository scan timed out after {TIMEOUT_CLAUDECODE} seconds")
+            return False, "", None, f"Timeout after {TIMEOUT_CLAUDECODE} seconds"
+        except Exception as e:
+            self.log(f"Exception during repository scan: {e}")
+            return False, "", None, str(e)
+
 
 def run_single_evaluation(test_case: EvalCase, verbose: bool = False, work_dir: str = None) -> EvalResult:
     """Convenience function to run a single evaluation.
-    
+
     Args:
         test_case: Test case to evaluate
         verbose: Enable verbose logging
         work_dir: Directory for temporary files
-        
+
     Returns:
         EvalResult
     """
     engine = EvaluationEngine(work_dir=work_dir, verbose=verbose)
     return engine.run_evaluation(test_case)
+
+
+def run_repository_evaluation(test_case: EvalCase, verbose: bool = False, work_dir: str = None) -> EvalResult:
+    """Convenience function to run a repository evaluation.
+
+    Args:
+        test_case: Test case to evaluate
+        verbose: Enable verbose logging
+        work_dir: Directory for temporary files
+
+    Returns:
+        EvalResult
+    """
+    engine = EvaluationEngine(work_dir=work_dir, verbose=verbose)
+    return engine.run_repository_evaluation(test_case)

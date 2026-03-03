@@ -61,29 +61,32 @@ def extract_json_from_text(text):
 def parse_json_with_fallbacks(text, error_context=""):
     """
     Parse JSON from text with multiple fallback strategies and error handling.
-    
+
     Args:
         text: The text to parse
         error_context: Context string for error messages
-        
+
     Returns:
         tuple: (success, result) where result is either the parsed JSON dict or error info
     """
     try:
         # First, try direct JSON parsing
         return True, json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    
+    except json.JSONDecodeError as e:
+        logger.error(f"Direct JSON parsing failed: {str(e)}. Raw input: {repr(text)}")
+    except Exception as e:
+        logger.error(f"Unexpected error during direct parsing: {str(e)}. Raw input: {repr(text)}")
+
     # Try extracting JSON from text
     extracted_json = extract_json_from_text(text)
     if extracted_json:
+        logger.debug(f"Successfully extracted JSON: {extracted_json}")
         return True, extracted_json
-    
+
     # If all parsing failed, return error info
     error_msg = "Failed to parse JSON"
     if error_context:
         error_msg = f"{error_context}: {error_msg}"
-    
+
     logger.error(f"{error_msg}. Raw output: {repr(text)}")
     return False, {"error": f"Invalid JSON response -- raw output: {repr(text)}"}

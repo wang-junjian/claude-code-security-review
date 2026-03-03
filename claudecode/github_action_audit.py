@@ -188,17 +188,19 @@ class GitHubActionClient:
 
 class SimpleClaudeRunner:
     """Simplified Claude Code runner for GitHub Actions."""
-    
-    def __init__(self, timeout_minutes: Optional[int] = None):
+
+    def __init__(self, timeout_minutes: Optional[int] = None, verbose: bool = False):
         """Initialize Claude runner.
-        
+
         Args:
             timeout_minutes: Timeout for Claude execution (defaults to SUBPROCESS_TIMEOUT)
+            verbose: Enable verbose logging
         """
         if timeout_minutes is not None:
             self.timeout_seconds = timeout_minutes * 60
         else:
             self.timeout_seconds = SUBPROCESS_TIMEOUT
+        self.verbose = verbose
     
     def run_security_audit(self, repo_dir: Path, prompt: str) -> Tuple[bool, str, Dict[str, Any]]:
         """Run Claude Code security audit.
@@ -289,17 +291,20 @@ class SimpleClaudeRunner:
     def _extract_security_findings(self, claude_output: Any) -> Dict[str, Any]:
         """Extract security findings from Claude's JSON response."""
         if isinstance(claude_output, dict):
-            # Only accept Claude Code wrapper with result field
-            # Direct format without wrapper is not supported
+            # Check if response already contains findings directly (without wrapper)
+            if 'findings' in claude_output and isinstance(claude_output['findings'], list):
+                return claude_output
+
+            # Check for Claude Code wrapper with result field
             if 'result' in claude_output:
                 result_text = claude_output['result']
                 if isinstance(result_text, str):
                     # Try to extract JSON from the result text
                     success, result_json = parse_json_with_fallbacks(result_text, "Claude result text")
-                    if success and result_json and 'findings' in result_json:
+                    if success and isinstance(result_json, dict) and 'findings' in result_json and isinstance(result_json['findings'], list):
                         return result_json
-        
-        # Return empty structure if no findings found
+
+        # Return empty structure if no findings found or parsing failed
         return {
             'findings': [],
             'analysis_summary': {
@@ -321,12 +326,20 @@ class SimpleClaudeRunner:
                 text=True,
                 timeout=10
             )
-            
+
             if result.returncode == 0:
-                # Also check if API key is configured
-                api_key = os.environ.get('ANTHROPIC_API_KEY', '')
-                if not api_key:
-                    return False, "ANTHROPIC_API_KEY environment variable is not set"
+                # Check API key based on LLM provider
+                llm_provider = os.environ.get('LLM_PROVIDER', 'anthropic').lower()
+                if llm_provider == 'anthropic':
+                    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+                    if not api_key:
+                        return False, "ANTHROPIC_API_KEY environment variable is not set"
+                elif llm_provider == 'openai':
+                    api_key = os.environ.get('OPENAI_API_KEY', '')
+                    if not api_key:
+                        return False, "OPENAI_API_KEY environment variable is not set"
+                # For other providers, we might not need to check API key here
+
                 return True, ""
             else:
                 error_msg = f"Claude Code returned exit code {result.returncode}"
@@ -335,7 +348,7 @@ class SimpleClaudeRunner:
                 if result.stdout:
                     error_msg += f". Stdout: {result.stdout}"
                 return False, error_msg
-                
+
         except subprocess.TimeoutExpired:
             return False, "Claude Code command timed out"
         except FileNotFoundError:
@@ -396,34 +409,51 @@ def initialize_clients() -> Tuple[GitHubActionClient, SimpleClaudeRunner]:
 
 def initialize_findings_filter(custom_filtering_instructions: Optional[str] = None) -> FindingsFilter:
     """Initialize findings filter based on environment configuration.
-    
+
     Args:
         custom_filtering_instructions: Optional custom filtering instructions
-        
+
     Returns:
         FindingsFilter instance
-        
+
     Raises:
         ConfigurationError: If filter initialization fails
     """
     try:
-        # Check if we should use Claude API filtering
-        use_claude_filtering = os.environ.get('ENABLE_CLAUDE_FILTERING', 'false').lower() == 'true'
-        api_key = os.environ.get('ANTHROPIC_API_KEY')
-        
-        if use_claude_filtering and api_key:
-            # Use full filtering with Claude API
+        # Check if we should use LLM API filtering
+        use_llm_filtering = os.environ.get('ENABLE_LLM_FILTERING', os.environ.get('ENABLE_CLAUDE_FILTERING', 'false')).lower() == 'true'
+        llm_provider = os.environ.get('LLM_PROVIDER', 'anthropic').lower()
+        api_key = None
+
+        if llm_provider == 'anthropic':
+            api_key = os.environ.get('ANTHROPIC_API_KEY')
+        elif llm_provider == 'openai':
+            api_key = os.environ.get('OPENAI_API_KEY')
+
+        model = None
+        if llm_provider == 'anthropic':
+            model = os.environ.get('CLAUDE_MODEL')
+        elif llm_provider == 'openai':
+            model = os.environ.get('OPENAI_MODEL')
+
+        base_url = os.environ.get('OPENAI_BASE_URL') if llm_provider == 'openai' else None
+
+        if use_llm_filtering and api_key:
+            # Use full filtering with LLM API
             return FindingsFilter(
                 use_hard_exclusions=True,
-                use_claude_filtering=True,
+                use_llm_filtering=True,
                 api_key=api_key,
+                model=model,
+                llm_provider=llm_provider,
+                base_url=base_url,
                 custom_filtering_instructions=custom_filtering_instructions
             )
         else:
             # Fallback to filtering with hard rules only
             return FindingsFilter(
                 use_hard_exclusions=True,
-                use_claude_filtering=False
+                use_llm_filtering=False
             )
     except Exception as e:
         raise ConfigurationError(f'Failed to initialize findings filter: {str(e)}')

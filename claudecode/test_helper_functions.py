@@ -113,8 +113,11 @@ class TestHelperFunctions:
             assert result == mock_filter_instance
             mock_filter.assert_called_once_with(
                 use_hard_exclusions=True,
-                use_claude_filtering=True,
+                use_llm_filtering=True,
                 api_key='test-key-123',
+                model=None,
+                llm_provider='anthropic',
+                base_url=None,
                 custom_filtering_instructions=None
             )
     

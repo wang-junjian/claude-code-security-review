@@ -115,9 +115,10 @@ class TestEvaluationEngine:
         """Test engine initialization with API key."""
         with patch.dict(os.environ, {'ANTHROPIC_API_KEY': 'test-key'}):
             engine = EvaluationEngine()
-            
+
             assert engine.work_dir == os.path.expanduser("~/code/audit")
-            assert engine.claude_api_key == 'test-key'
+            assert engine.api_key == 'test-key'
+            assert engine.llm_provider == 'anthropic'
     
     def test_engine_initialization_no_api_key(self):
         """Test engine initialization without API key."""

@@ -125,7 +125,7 @@ class TestMainFunction:
             mock_full_filter_class.assert_called_once()
             call_kwargs = mock_full_filter_class.call_args[1]
             assert call_kwargs['use_hard_exclusions'] is True
-            assert call_kwargs['use_claude_filtering'] is True
+            assert call_kwargs['use_llm_filtering'] is True
             assert call_kwargs['api_key'] == 'test-api-key'
         
         # Reset mocks
@@ -145,7 +145,7 @@ class TestMainFunction:
             mock_full_filter_class.assert_called_once()
             call_kwargs = mock_full_filter_class.call_args[1]
             assert call_kwargs['use_hard_exclusions'] is True
-            assert call_kwargs['use_claude_filtering'] is False
+            assert call_kwargs['use_llm_filtering'] is False
     
     @patch('claudecode.github_action_audit.FindingsFilter')
     @patch('claudecode.github_action_audit.SimpleClaudeRunner')
