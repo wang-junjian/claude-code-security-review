@@ -4,12 +4,35 @@ An AI-powered security review GitHub Action using Claude to analyze code changes
 
 ## Features
 
+### AI-Powered Analysis
 - **AI-Powered Analysis**: Uses Claude's advanced reasoning to detect security vulnerabilities with deep semantic understanding
 - **Diff-Aware Scanning**: For PRs, only analyzes changed files
 - **PR Comments**: Automatically comments on PRs with security findings
 - **Contextual Understanding**: Goes beyond pattern matching to understand code semantics
 - **Language Agnostic**: Works with any programming language
 - **False Positive Filtering**: Advanced filtering to reduce noise and focus on real vulnerabilities
+
+### Web Interface
+- **Visualization**: 提供动态的Web界面，用于查看和分析安全评估结果
+- **Real-time Analysis**: 服务器启动时会实时解析 eval_results/ 目录中的评估结果
+- **Comprehensive Search**: 支持按类型、仓库和PR号筛选结果
+- **Security Findings Display**: 详细展示安全漏洞和问题的严重程度
+- **Responsive Design**: 支持多种屏幕尺寸
+
+### 使用方法
+1. **启动服务器**：
+   ```bash
+   cd web
+   node server.js
+   ```
+2. **访问界面**：在浏览器中打开 http://localhost:8081
+
+**Web界面功能**：
+- 显示评估结果的详细信息
+- 支持按类型（PR/仓库）、仓库名称、PR号筛选
+- 搜索功能（支持仓库名和PR号）
+- 按严重程度（HIGH/MEDIUM/LOW）标记颜色
+- 响应式设计，支持多种屏幕尺寸
 
 ## Quick Start
 
