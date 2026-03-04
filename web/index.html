@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安全评估结果查看器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: #4a90d9;
+            color: white;
+            padding: 20px 0;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        header h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+
+        .filter-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .filter-section h2 {
+            margin-bottom: 15px;
+            color: #4a90d9;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filter-controls select,
+        .filter-controls input {
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+
+        .filter-controls button {
+            padding: 10px 20px;
+            background: #4a90d9;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .filter-controls button:hover {
+            background: #357abd;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .result-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .result-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .result-card h3 {
+            margin-bottom: 10px;
+            color: #4a90d9;
+            font-size: 1.2rem;
+        }
+
+        .result-card .info {
+            margin-bottom: 10px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .result-card .stats {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .stat {
+            padding: 5px 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .stat.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .stat.failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .stat.high {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .stat.medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .stat.low {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .result-card .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .result-card .actions button {
+            padding: 8px 15px;
+            background: #4a90d9;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .result-card .actions button:hover {
+            background: #357abd;
+        }
+
+        .result-details {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            margin-bottom: 30px;
+        }
+
+        .result-details h2 {
+            margin-bottom: 20px;
+            color: #4a90d9;
+        }
+
+        .detail-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .detail-section h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .findings-list {
+            list-style: none;
+        }
+
+        .finding-item {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+            border-left: 4px solid #4a90d9;
+        }
+
+        .finding-item.high {
+            border-left-color: #dc3545;
+        }
+
+        .finding-item.medium {
+            border-left-color: #ffc107;
+        }
+
+        .finding-item.low {
+            border-left-color: #28a745;
+        }
+
+        .finding-item h4 {
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .finding-item .severity {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #4a90d9;
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+
+        .finding-item .severity.high {
+            background: #dc3545;
+        }
+
+        .finding-item .severity.medium {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .finding-item .severity.low {
+            background: #28a745;
+        }
+
+        .finding-item .file {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .finding-item .description {
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .remediation {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f8ff;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .remediation h5 {
+            margin-bottom: 5px;
+            color: #4a90d9;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2rem;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>安全评估结果查看器</h1>
+    </header>
+
+    <div class="container">
+        <div class="filter-section">
+            <h2>筛选和搜索</h2>
+            <div class="filter-controls">
+                <select id="typeFilter">
+                    <option value="">所有类型</option>
+                    <option value="pr">PR评估</option>
+                    <option value="repo">仓库评估</option>
+                </select>
+
+                <select id="repoFilter">
+                    <option value="">所有仓库</option>
+                </select>
+
+                <input type="text" id="searchInput" placeholder="搜索仓库名称或PR号">
+
+                <button onclick="filterResults()">筛选</button>
+                <button onclick="resetFilters()">重置</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading">加载中...</div>
+        <div id="error" class="error hidden"></div>
+
+        <div id="resultsGrid" class="results-grid hidden"></div>
+        <div id="resultDetails" class="result-details hidden"></div>
+    </div>
+
+    <script>
+        let allResults = [];
+        let currentResults = [];
+
+        // 页面加载时获取所有评估结果
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAllResults();
+        });
+
+        // 加载所有评估结果
+        async function loadAllResults() {
+            try {
+                const response = await fetch('/api/results');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                allResults = await response.json();
+                currentResults = [...allResults];
+
+                // 填充仓库筛选下拉框
+                const repos = [...new Set(allResults.map(result => result.repo_name))];
+                const repoFilter = document.getElementById('repoFilter');
+                repos.forEach(repo => {
+                    const option = document.createElement('option');
+                    option.value = repo;
+                    option.textContent = repo;
+                    repoFilter.appendChild(option);
+                });
+
+                // 显示结果
+                displayResults(currentResults);
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('resultsGrid').classList.remove('hidden');
+            } catch (error) {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('error').textContent = `加载失败: ${error.message}`;
+                document.getElementById('error').classList.remove('hidden');
+            }
+        }
+
+        // 显示结果卡片
+        function displayResults(results) {
+            const grid = document.getElementById('resultsGrid');
+            grid.innerHTML = '';
+
+            if (results.length === 0) {
+                grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: #666;">没有找到匹配的评估结果</div>';
+                return;
+            }
+
+            results.forEach(result => {
+                const card = createResultCard(result);
+                grid.appendChild(card);
+            });
+        }
+
+        // 创建结果卡片
+        function createResultCard(result) {
+            const card = document.createElement('div');
+            card.className = 'result-card';
+
+            const hasVulnerabilities = result.detected_vulnerabilities;
+            const severityCounts = countSeverities(result);
+
+            card.innerHTML = `
+                <h3>${result.repo_name}</h3>
+                <div class="info">
+                    <div>类型: ${result.type === 'pr' ? 'PR评估' : '仓库评估'}</div>
+                    ${result.type === 'pr' ? `<div>PR号: #${result.pr_number}</div>` : ''}
+                    <div>运行时间: ${result.runtime_seconds.toFixed(2)}秒</div>
+                </div>
+                <div class="stats">
+                    <div class="stat ${result.success ? 'success' : 'failed'}">
+                        ${result.success ? '成功' : '失败'}
+                    </div>
+                    <div class="stat ${hasVulnerabilities ? 'high' : 'success'}">
+                        ${result.findings_count}个发现
+                    </div>
+                    ${severityCounts.high > 0 ? `<div class="stat high">高危: ${severityCounts.high}</div>` : ''}
+                    ${severityCounts.medium > 0 ? `<div class="stat medium">中危: ${severityCounts.medium}</div>` : ''}
+                    ${severityCounts.low > 0 ? `<div class="stat low">低危: ${severityCounts.low}</div>` : ''}
+                </div>
+                <div class="actions">
+                    <button onclick="showDetails('${result.id}')">查看详情</button>
+                </div>
+            `;
+
+            return card;
+        }
+
+        // 统计不同严重程度的发现数量
+        function countSeverities(result) {
+            const counts = { high: 0, medium: 0, low: 0 };
+
+            if (result.findings_summary) {
+                result.findings_summary.forEach(finding => {
+                    const severity = finding.severity.toLowerCase();
+                    if (counts[severity] !== undefined) {
+                        counts[severity]++;
+                    }
+                });
+            }
+
+            if (result.full_findings) {
+                result.full_findings.forEach(finding => {
+                    const severity = finding.severity.toLowerCase();
+                    if (counts[severity] !== undefined) {
+                        counts[severity]++;
+                    }
+                });
+            }
+
+            return counts;
+        }
+
+        // 显示结果详情
+        function showDetails(id) {
+            const result = allResults.find(r => r.id === id);
+            if (!result) {
+                alert('未找到对应的评估结果');
+                return;
+            }
+
+            const detailsDiv = document.getElementById('resultDetails');
+            detailsDiv.innerHTML = createDetailsHTML(result);
+            detailsDiv.classList.remove('hidden');
+            detailsDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // 创建详情HTML
+        function createDetailsHTML(result) {
+            let html = `
+                <h2>${result.repo_name} - ${result.type === 'pr' ? `PR #${result.pr_number}` : '仓库评估'}</h2>
+
+                <div class="detail-section">
+                    <h3>基本信息</h3>
+                    <p><strong>描述:</strong> ${result.description}</p>
+                    <p><strong>状态:</strong> <span class="${result.success ? 'success' : 'failed'} stat">${result.success ? '成功' : '失败'}</span></p>
+                    <p><strong>运行时间:</strong> ${result.runtime_seconds.toFixed(2)}秒</p>
+                    <p><strong>发现数量:</strong> ${result.findings_count}</p>
+                    <p><strong>检测到漏洞:</strong> ${result.detected_vulnerabilities ? '是' : '否'}</p>
+                    ${result.error_message ? `<p><strong>错误信息:</strong> ${result.error_message}</p>` : ''}
+                </div>
+            `;
+
+            // 显示发现摘要
+            if (result.findings_summary && result.findings_summary.length > 0) {
+                html += `
+                    <div class="detail-section">
+                        <h3>发现摘要</h3>
+                        <ul class="findings-list">
+                `;
+
+                result.findings_summary.forEach(finding => {
+                    html += `
+                        <li class="finding-item ${finding.severity.toLowerCase()}">
+                            <h4>
+                                <span class="severity ${finding.severity.toLowerCase()}">${finding.severity}</span>
+                                ${finding.title}
+                            </h4>
+                            ${finding.file ? `<div class="file">文件: ${finding.file}</div>` : ''}
+                            ${finding.line > 0 ? `<div class="file">行号: ${finding.line}</div>` : ''}
+                            <div class="description">${finding.description}</div>
+                        </li>
+                    `;
+                });
+
+                html += `
+                        </ul>
+                    </div>
+                `;
+            }
+
+            // 显示完整发现
+            if (result.full_findings && result.full_findings.length > 0) {
+                html += `
+                    <div class="detail-section">
+                        <h3>完整发现详情</h3>
+                        <ul class="findings-list">
+                `;
+
+                result.full_findings.forEach(finding => {
+                    html += `
+                        <li class="finding-item ${finding.severity.toLowerCase()}">
+                            <h4>
+                                <span class="severity ${finding.severity.toLowerCase()}">${finding.severity}</span>
+                                ${finding.title}
+                            </h4>
+                            ${finding.file ? `<div class="file">文件: ${finding.file}</div>` : ''}
+                            ${finding.line > 0 ? `<div class="file">行号: ${finding.line}</div>` : ''}
+                            <div class="description">${finding.description}</div>
+                            ${finding.remediation ? `
+                                <div class="remediation">
+                                    <h5>修复建议:</h5>
+                                    <p>${finding.remediation}</p>
+                                </div>
+                            ` : ''}
+                        </li>
+                    `;
+                });
+
+                html += `
+                        </ul>
+                    </div>
+                `;
+            }
+
+            return html;
+        }
+
+        // 筛选结果
+        function filterResults() {
+            const type = document.getElementById('typeFilter').value;
+            const repo = document.getElementById('repoFilter').value;
+            const search = document.getElementById('searchInput').value.toLowerCase();
+
+            currentResults = allResults.filter(result => {
+                const matchesType = type === '' || result.type === type;
+                const matchesRepo = repo === '' || result.repo_name === repo;
+                const matchesSearch = search === '' ||
+                    result.repo_name.toLowerCase().includes(search) ||
+                    (result.type === 'pr' && result.pr_number.toString().includes(search));
+
+                return matchesType && matchesRepo && matchesSearch;
+            });
+
+            displayResults(currentResults);
+            document.getElementById('resultDetails').classList.add('hidden');
+        }
+
+        // 重置筛选
+        function resetFilters() {
+            document.getElementById('typeFilter').value = '';
+            document.getElementById('repoFilter').value = '';
+            document.getElementById('searchInput').value = '';
+            currentResults = [...allResults];
+            displayResults(currentResults);
+            document.getElementById('resultDetails').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
