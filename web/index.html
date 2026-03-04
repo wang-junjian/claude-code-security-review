@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>安全评估结果查看器</title>
+    <title>Claude Code Security Review</title>
     <style>
         * {
             margin: 0;
@@ -36,6 +36,50 @@
             text-align: center;
             font-size: 2.5rem;
             font-weight: 700;
+        }
+
+        .nav-section {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .nav-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            padding: 10px 20px;
+            background: #f0f0f0;
+            color: #333;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 1px solid #ddd;
+        }
+
+        .nav-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .nav-btn.active {
+            background: #4a90d9;
+            color: white;
+            border-color: #4a90d9;
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
         }
 
         .filter-section {
@@ -292,49 +336,896 @@
             border-radius: 5px;
             margin-bottom: 20px;
         }
+
+        .content-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .content-section h2 {
+            margin-bottom: 20px;
+            color: #4a90d9;
+        }
+
+        .content-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .content-section h4 {
+            margin-bottom: 10px;
+            color: #555;
+        }
+
+        .content-section p {
+            margin-bottom: 15px;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .content-section ol,
+        .content-section ul {
+            margin-bottom: 15px;
+            margin-left: 25px;
+        }
+
+        .content-section li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin-bottom: 15px;
+            border: 1px solid #e9ecef;
+        }
+
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        pre code {
+            background: transparent;
+            padding: 0;
+        }
+
+        .config-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .config-table th,
+        .config-table td {
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .config-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .config-table tr:hover {
+            background: #f5f5f5;
+        }
+
+        .example-content {
+            margin-bottom: 15px;
+        }
+
+        .example-content pre {
+            margin-bottom: 10px;
+        }
+
+        .edit-btn {
+            padding: 8px 15px;
+            background: #4a90d9;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .edit-btn:hover {
+            background: #357abd;
+        }
+
+        .edit-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .edit-modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 15px;
+            color: #4a90d9;
+        }
+
+        .modal-content textarea {
+            width: 100%;
+            height: 300px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin-bottom: 15px;
+            resize: vertical;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-buttons button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .modal-buttons .save-btn {
+            background: #4a90d9;
+            color: white;
+        }
+
+        .modal-buttons .save-btn:hover {
+            background: #357abd;
+        }
+
+        .modal-buttons .cancel-btn {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .modal-buttons .cancel-btn:hover {
+            background: #e0e0e0;
+        }
     </style>
 </head>
 <body>
     <header>
-        <h1>安全评估结果查看器</h1>
+        <h1>Claude Code Security Review</h1>
     </header>
 
     <div class="container">
-        <div class="filter-section">
-            <h2>筛选和搜索</h2>
-            <div class="filter-controls">
-                <select id="typeFilter">
-                    <option value="">所有类型</option>
-                    <option value="pr">PR评估</option>
-                    <option value="repo">仓库评估</option>
-                </select>
-
-                <select id="repoFilter">
-                    <option value="">所有仓库</option>
-                </select>
-
-                <input type="text" id="searchInput" placeholder="搜索仓库名称或PR号">
-
-                <button onclick="filterResults()">筛选</button>
-                <button onclick="resetFilters()">重置</button>
+        <!-- 导航菜单 -->
+        <div class="nav-section">
+            <div class="nav-controls">
+                <button onclick="showSection('results')" class="nav-btn active">评估结果</button>
+                <button onclick="showSection('security-review')" class="nav-btn">/security-review 命令</button>
+                <button onclick="showSection('custom-filtering')" class="nav-btn">自定义过滤说明</button>
+                <button onclick="showSection('custom-scan')" class="nav-btn">自定义安全扫描说明</button>
+                <button onclick="showSection('usage')" class="nav-btn">使用指导和示例</button>
             </div>
         </div>
+
+        <!-- 评估结果查看器 -->
+        <div id="resultsSection" class="section active">
+            <div class="filter-section">
+                <h2>筛选和搜索</h2>
+                <div class="filter-controls">
+                    <select id="typeFilter">
+                        <option value="">所有类型</option>
+                        <option value="pr">PR评估</option>
+                        <option value="repo">仓库评估</option>
+                    </select>
+
+                    <select id="repoFilter">
+                        <option value="">所有仓库</option>
+                    </select>
+
+                    <input type="text" id="searchInput" placeholder="搜索仓库名称或PR号">
+
+                    <button onclick="filterResults()">筛选</button>
+                    <button onclick="resetFilters()">重置</button>
+                </div>
+            </div>
 
         <div id="loading" class="loading">加载中...</div>
         <div id="error" class="error hidden"></div>
 
         <div id="resultsGrid" class="results-grid hidden"></div>
         <div id="resultDetails" class="result-details hidden"></div>
+        </div>
+
+        <!-- /security-review 命令部分 -->
+        <div id="securityReviewSection" class="section">
+            <div class="content-section">
+                <h2>/security-review 命令</h2>
+                <div class="detail-section">
+                    <h3>概述</h3>
+                    <p>Claude Code 内置了 <code>/security-review</code> 命令，提供与 GitHub Action 相同的安全分析功能，但直接集成到您的 Claude Code 开发环境中。</p>
+                    <p>要使用此功能，只需在 Claude Code 中运行 <code>/security-review</code> 即可对所有待更改进行全面的安全审查。</p>
+                </div>
+
+                <div class="detail-section">
+                    <h3>命令配置文件</h3>
+                    <p>命令配置文件位于：<code>.claude/commands/security-review.md</code></p>
+                    <button onclick="loadSecurityReviewContent()" class="nav-btn">加载命令配置</button>
+                    <button onclick="editSecurityReview()" class="edit-btn">编辑配置</button>
+                </div>
+
+                <div class="detail-section">
+                    <h3>配置内容</h3>
+                    <div id="securityReviewContent" class="markdown-content">
+                        <p>点击"加载命令配置"按钮查看完整内容</p>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>自定义命令</h3>
+                    <p>默认的 <code>/security-review</code> 命令设计适用于大多数情况，但您也可以根据特定安全需求进行自定义：</p>
+                    <ol>
+                        <li>将 <code>.claude/commands/security-review.md</code> 文件从本仓库复制到您项目的 <code>.claude/commands/</code> 文件夹中</li>
+                        <li>编辑 <code>security-review.md</code> 来定制安全分析，例如添加组织特定的误报过滤说明</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- 自定义过滤说明部分 -->
+        <div id="customFilteringSection" class="section">
+            <div class="content-section">
+                <h2>自定义过滤说明</h2>
+                <div class="detail-section">
+                    <h3>概述</h3>
+                    <p>Claude Code Security Reviewer 支持自定义误报过滤说明，允许您根据特定环境和需求调整安全分析。</p>
+                </div>
+
+                <div class="detail-section">
+                    <h3>使用方法</h3>
+                    <ol>
+                        <li>创建包含自定义过滤说明的文本文件（例如 <code>.github/false-positive-filtering.txt</code>）</li>
+                        <li>在工作流程中引用它：
+                            <pre><code>name: Security Review
+
+permissions:
+  pull-requests: write
+  contents: read
+
+on:
+  pull_request:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+
+      - uses: anthropics/claude-code-security-review@main
+        with:
+          comment-pr: true
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          false-positive-filtering-instructions: .github/false-positive-filtering.txt
+</code></pre>
+                        </li>
+                    </ol>
+                </div>
+
+                <div class="detail-section">
+                    <h3>文件格式</h3>
+                    <p>文件应包含纯文本，分为三个主要部分：</p>
+                    <ul>
+                        <li><strong>HARD EXCLUSIONS</strong>：列出应自动从发现中排除的模式</li>
+                        <li><strong>SIGNAL QUALITY CRITERIA</strong>：评估发现是否代表真实漏洞的问题</li>
+                        <li><strong>PRECEDENTS</strong>：针对您环境中常见安全模式的具体指导</li>
+                    </ul>
+                </div>
+
+                <div class="detail-section">
+                    <h3>示例</h3>
+                    <div class="example-content">
+                        <pre id="customFilteringExample"></pre>
+                        <button onclick="editCustomFilteringExample()" class="edit-btn">编辑示例</button>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>最佳实践</h3>
+                    <ol>
+                        <li><strong>从默认开始</strong>：先使用默认说明，然后根据遇到的误报进行修改</li>
+                        <li><strong>具体说明</strong>：包括有关安全架构的详细信息（例如，"我们使用 AWS Cognito 进行所有身份验证"）</li>
+                        <li><strong>记录假设</strong>：解释为什么排除某些模式（例如，"k8s 资源限制可防止 DOS"）</li>
+                        <li><strong>版本控制</strong>：与代码一起跟踪过滤说明的变更</li>
+                        <li><strong>团队审查</strong>：让您的安全团队审查并批准过滤说明</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- 自定义安全扫描说明部分 -->
+        <div id="customScanSection" class="section">
+            <div class="content-section">
+                <h2>自定义安全扫描说明</h2>
+                <div class="detail-section">
+                    <h3>概述</h3>
+                    <p>Claude Code Security Reviewer 支持自定义安全扫描说明，允许您向安全审计添加组织特定的漏洞类别。</p>
+                    <p>默认安全扫描涵盖常见的漏洞类别，如 SQL 注入、XSS、身份验证问题等。但组织通常有基于以下方面的特定安全问题：</p>
+                    <ul>
+                        <li>技术栈（GraphQL、gRPC、特定云提供商）</li>
+                        <li>合规要求（GDPR、HIPAA、PCI DSS）</li>
+                        <li>行业特定漏洞（金融服务、医疗保健）</li>
+                        <li>自定义框架和库</li>
+                    </ul>
+                </div>
+
+                <div class="detail-section">
+                    <h3>使用方法</h3>
+                    <ol>
+                        <li>创建包含自定义安全类别的文本文件（例如 <code>.github/custom-security-categories.txt</code>）</li>
+                        <li>在工作流程中引用它：
+                            <pre><code>name: Security Review
+
+permissions:
+  pull-requests: write
+  contents: read
+
+on:
+  pull_request:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+
+      - uses: anthropics/claude-code-security-review@main
+        with:
+          comment-pr: true
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          custom-security-scan-instructions: .github/custom-security-categories.txt
+</code></pre>
+                        </li>
+                    </ol>
+                </div>
+
+                <div class="detail-section">
+                    <h3>文件格式</h3>
+                    <p>文件应包含与默认类别相同格式的附加安全类别。每个类别应：</p>
+                    <ul>
+                        <li>以粗体的描述性标题开头（使用 <code>**Category Name:**</code>）</li>
+                        <li>列出要检查的特定漏洞或模式</li>
+                        <li>使用清晰、可操作的描述</li>
+                    </ul>
+                    <p><strong>示例结构：</strong></p>
+                    <pre><code>**Category Name:**
+- Specific vulnerability or pattern to check
+- Another specific issue to look for
+- Detailed description of what constitutes this vulnerability
+
+**Another Category:**
+- More specific checks
+- Additional patterns to identify
+</code></pre>
+                </div>
+
+                <div class="detail-section">
+                    <h3>示例</h3>
+                    <div class="example-content">
+                        <pre id="customScanExample"></pre>
+                        <button onclick="editCustomScanExample()" class="edit-btn">编辑示例</button>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>工作原理</h3>
+                    <p>您的自定义说明会附加到默认"数据暴露"类别之后的安全审计提示中。这意味着：</p>
+                    <ol>
+                        <li>所有默认类别仍会被检查</li>
+                        <li>您的自定义类别会扩展（而非替换）默认扫描</li>
+                        <li>相同的 HIGH/MEDIUM/LOW 严重程度准则适用</li>
+                    </ol>
+                </div>
+
+                <div class="detail-section">
+                    <h3>最佳实践</h3>
+                    <ol>
+                        <li><strong>具体说明</strong>：提供关于每个漏洞构成的清晰描述</li>
+                        <li><strong>包含上下文</strong>：解释为什么某些问题在您的环境中是漏洞（例如，"我们的支付处理系统要求加密"）</li>
+                        <li><strong>提供示例</strong>：尽可能描述特定的攻击场景</li>
+                        <li><strong>避免重复</strong>：检查默认类别以避免冗余</li>
+                        <li><strong>保持专注</strong>：只添加与您的代码库相关的类别</li>
+                    </ol>
+                </div>
+
+                <div class="detail-section">
+                    <h3>默认类别参考</h3>
+                    <p>默认扫描已包括：</p>
+                    <ul>
+                        <li><strong>输入验证</strong>：SQL 注入、命令注入、XXE 等</li>
+                        <li><strong>身份验证与授权</strong>：身份验证绕过、权限提升、会话管理等</li>
+                        <li><strong>加密与密钥管理</strong>：硬编码密钥、弱加密算法、不当密钥管理等</li>
+                        <li><strong>注入与代码执行</strong>：远程代码执行、反序列化攻击等</li>
+                        <li><strong>数据暴露</strong>：敏感数据泄露、PII 处理违规等</li>
+                    </ul>
+                    <p>您的自定义类别应补充这些内容，而不是重复它们。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 使用指导和示例部分 -->
+        <div id="usageSection" class="section">
+            <div class="content-section">
+                <h2>使用指导和示例</h2>
+
+                <div class="detail-section">
+                    <h3>快速开始</h3>
+                    <p>将以下内容添加到您仓库的 <code>.github/workflows/security.yml</code> 中：</p>
+                    <pre><code>name: Security Review
+
+permissions:
+  pull-requests: write  # Needed for leaving PR comments
+  contents: read
+
+on:
+  pull_request:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+
+      - uses: anthropics/claude-code-security-review@main
+        with:
+          comment-pr: true
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+</code></pre>
+                </div>
+
+                <div class="detail-section">
+                    <h3>配置选项</h3>
+                    <h4>操作输入</h4>
+                    <table class="config-table">
+                        <thead>
+                            <tr>
+                                <th>输入参数</th>
+                                <th>描述</th>
+                                <th>默认值</th>
+                                <th>是否必填</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>claude-api-key</code></td>
+                                <td>用于安全分析的 Anthropic Claude API 密钥。此 API 密钥需要同时启用 Claude API 和 Claude Code 使用。</td>
+                                <td>无</td>
+                                <td>是</td>
+                            </tr>
+                            <tr>
+                                <td><code>comment-pr</code></td>
+                                <td>是否在 PR 上评论发现</td>
+                                <td>true</td>
+                                <td>否</td>
+                            </tr>
+                            <tr>
+                                <td><code>upload-results</code></td>
+                                <td>是否将结果上传为工件</td>
+                                <td>true</td>
+                                <td>否</td>
+                            </tr>
+                            <tr>
+                                <td><code>exclude-directories</code></td>
+                                <td>要从扫描中排除的目录的逗号分隔列表</td>
+                                <td>无</td>
+                                <td>否</td>
+                            </tr>
+                            <tr>
+                                <td><code>claude-model</code></td>
+                                <td>要使用的 Claude 模型名称。默认使用 Opus 4.1。</td>
+                                <td>claude-opus-4-1-20250805</td>
+                                <td>否</td>
+                            </tr>
+                            <tr>
+                                <td><code>claudecode-timeout</code></td>
+                                <td>ClaudeCode 分析的超时时间（分钟）</td>
+                                <td>20</td>
+                                <td>否</td>
+                            </tr>
+                            <tr>
+                                <td><code>run-every-commit</code></td>
+                                <td>在每个提交上运行 ClaudeCode（跳过缓存检查）。警告：可能会增加包含许多提交的 PR 的误报率。</td>
+                                <td>false</td>
+                                <td>否</td>
+                            </tr>
+                            <tr>
+                                <td><code>false-positive-filtering-instructions</code></td>
+                                <td>自定义误报过滤说明文本文件的路径</td>
+                                <td>无</td>
+                                <td>否</td>
+                            </tr>
+                            <tr>
+                                <td><code>custom-security-scan-instructions</code></td>
+                                <td>要附加到审计提示的自定义安全扫描说明文本文件的路径</td>
+                                <td>无</td>
+                                <td>否</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="detail-section">
+                    <h3>操作输出</h3>
+                    <table class="config-table">
+                        <thead>
+                            <tr>
+                                <th>输出参数</th>
+                                <th>描述</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>findings-count</code></td>
+                                <td>安全发现的总数</td>
+                            </tr>
+                            <tr>
+                                <td><code>results-file</code></td>
+                                <td>结果 JSON 文件的路径</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="detail-section">
+                    <h3>支持的漏洞类型</h3>
+                    <ul>
+                        <li><strong>注入攻击</strong>：SQL 注入、命令注入、LDAP 注入、XPath 注入、NoSQL 注入、XXE</li>
+                        <li><strong>身份验证与授权</strong>：身份验证绕过、权限提升、不安全的直接对象引用、绕过逻辑、会话缺陷</li>
+                        <li><strong>数据暴露</strong>：硬编码机密、敏感数据记录、信息泄露、PII 处理违规</li>
+                        <li><strong>加密问题</strong>：弱算法、不当密钥管理、不安全的随机数生成</li>
+                        <li><strong>输入验证</strong>：缺失验证、不当清理、缓冲区溢出</li>
+                        <li><strong>业务逻辑缺陷</strong>：竞争条件、检查时间/使用时间（TOCTOU）问题</li>
+                        <li><strong>配置安全</strong>：不安全的默认值、缺失的安全头、宽松的 CORS 策略</li>
+                        <li><strong>供应链</strong>：易受攻击的依赖项、拼写错误的包名风险</li>
+                        <li><strong>代码执行</strong>：通过反序列化的 RCE、pickle 注入、eval 注入</li>
+                        <li><strong>跨站点脚本（XSS）</strong>：反射型、存储型和 DOM 型 XSS</li>
+                    </ul>
+                </div>
+
+                <div class="detail-section">
+                    <h3>误报过滤</h3>
+                    <p>该工具会自动排除各种低影响和容易误报的发现，以专注于高影响的漏洞：</p>
+                    <ul>
+                        <li>拒绝服务（DOS）漏洞</li>
+                        <li>速率限制问题</li>
+                        <li>内存/CPU 耗尽问题</li>
+                        <li>没有已证实影响的通用输入验证</li>
+                        <li>开放重定向漏洞</li>
+                    </ul>
+                    <p>误报过滤也可以根据特定项目的安全目标进行调整。</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
         let allResults = [];
         let currentResults = [];
+        let originalCustomFilteringExample = `HARD EXCLUSIONS - Automatically exclude findings matching these patterns:
+1. All DOS/resource exhaustion - we have k8s resource limits and autoscaling
+2. Missing rate limiting - handled by our API gateway
+3. Tabnabbing vulnerabilities - acceptable risk per our threat model
+4. Test files (ending in _test.go, _test.js, or in __tests__ directories)
+5. Documentation files (*.md, *.rst)
+6. Configuration files that are not exposed to users (internal configs)
+7. Memory safety in Rust, Go, or managed languages
+8. GraphQL introspection queries - we intentionally expose schema in dev
+9. Missing CSRF protection - we use stateless JWT auth exclusively
+10. Timing attacks on non-cryptographic operations
+11. Regex DoS in input validation (we have request timeouts)
+12. Missing security headers in internal services (only public-facing services need them)
+
+SIGNAL QUALITY CRITERIA - For remaining findings, assess:
+1. Can an unauthenticated external attacker exploit this?
+2. Is there actual data exfiltration or system compromise potential?
+3. Is this exploitable in our production Kubernetes environment?
+4. Does this bypass our API gateway security controls?
+
+PRECEDENTS -
+1. We use AWS Cognito for all authentication - auth bypass must defeat Cognito
+2. All APIs require valid JWT tokens validated at the gateway level
+3. SQL injection is only valid if using raw queries (we use Prisma ORM everywhere)
+4. All internal services communicate over mTLS within the k8s cluster
+5. Secrets are in AWS Secrets Manager or k8s secrets, never in code
+6. We allow verbose error messages in dev/staging (not production)
+7. File uploads go directly to S3 with presigned URLs (no local file handling)
+8. All user input is considered untrusted and validated on the backend
+9. Frontend validation is only for UX, not security
+10. We use CSP headers and strict Content-Type validation
+11. CORS is configured per-service based on actual needs
+12. All webhooks use HMAC signature verification`;
+
+        let originalCustomScanExample = `**Compliance-Specific Checks:**
+- GDPR Article 17 "Right to Erasure" implementation gaps
+- HIPAA PHI encryption at rest violations
+- PCI DSS credit card data retention beyond allowed periods
+- SOC2 audit trail tampering or deletion capabilities
+- CCPA data portability API vulnerabilities
+
+**Financial Services Security:**
+- Transaction replay attacks in payment processing
+- Double-spending vulnerabilities in ledger systems
+- Interest calculation manipulation through timing attacks
+- Regulatory reporting data tampering
+- Know Your Customer (KYC) bypass mechanisms
+
+**E-commerce Specific:**
+- Shopping cart manipulation for price changes
+- Inventory race conditions allowing overselling
+- Coupon/discount stacking exploits
+- Affiliate tracking manipulation
+- Review system authentication bypass`;
+
+        let originalSecurityReviewContent = '';
 
         // 页面加载时获取所有评估结果
         document.addEventListener('DOMContentLoaded', function() {
             loadAllResults();
+            initExamples();
+            // 可选：页面加载时自动加载 security-review 内容
+            // loadSecurityReviewContent();
         });
+
+        // 加载 security-review 命令配置
+        async function loadSecurityReviewContent() {
+            try {
+                const response = await fetch('/api/security-review');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const content = await response.text();
+                originalSecurityReviewContent = content;
+                displaySecurityReviewContent(content);
+            } catch (error) {
+                console.error('加载安全审查命令配置失败:', error);
+                document.getElementById('securityReviewContent').innerHTML =
+                    `<p style="color: red;">加载失败: ${error.message}</p>`;
+            }
+        }
+
+        // 显示 security-review 内容
+        function displaySecurityReviewContent(content) {
+            const contentDiv = document.getElementById('securityReviewContent');
+            // 简单的 Markdown 转义显示（或使用简单的解析）
+            const escapedContent = content.replace(/&/g, '&amp;')
+                                         .replace(/</g, '&lt;')
+                                         .replace(/>/g, '&gt;')
+                                         .replace(/\n/g, '<br>')
+                                         .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+                                         .replace(/`([^`]+)`/g, '<code>$1</code>');
+
+            contentDiv.innerHTML = `<pre>${escapedContent}</pre>`;
+        }
+
+        // 编辑 security-review 配置
+        function editSecurityReview() {
+            if (!originalSecurityReviewContent) {
+                alert('请先加载配置内容');
+                return;
+            }
+            showEditModal('securityReview', originalSecurityReviewContent);
+        }
+
+        // 修改 showEditModal 函数以支持 securityReview 类型
+        function showEditModal(type, content) {
+            const modal = document.createElement('div');
+            modal.className = 'edit-modal active';
+            let title = '';
+            switch(type) {
+                case 'customFiltering':
+                    title = '编辑自定义过滤示例';
+                    break;
+                case 'customScan':
+                    title = '编辑自定义安全扫描示例';
+                    break;
+                case 'securityReview':
+                    title = '编辑 /security-review 命令配置';
+                    break;
+            }
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3>${title}</h3>
+                    <textarea id="editTextArea">${content}</textarea>
+                    <div class="modal-buttons">
+                        <button class="save-btn" onclick="saveEditModal('${type}')">保存</button>
+                        <button class="cancel-btn" onclick="closeEditModal()">取消</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        // 修改 saveEditModal 函数以支持 securityReview 类型
+        function saveEditModal(type) {
+            const textArea = document.getElementById('editTextArea');
+            const newContent = textArea.value;
+
+            if (type === 'customFiltering') {
+                originalCustomFilteringExample = newContent;
+                document.getElementById('customFilteringExample').textContent = newContent;
+            } else if (type === 'customScan') {
+                originalCustomScanExample = newContent;
+                document.getElementById('customScanExample').textContent = newContent;
+            } else if (type === 'securityReview') {
+                originalSecurityReviewContent = newContent;
+                displaySecurityReviewContent(newContent);
+                saveSecurityReviewToServer(newContent);
+            }
+
+            closeEditModal();
+        }
+
+        // 保存 security-review 配置到服务器
+        async function saveSecurityReviewToServer(content) {
+            try {
+                const response = await fetch('/api/security-review', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content: content })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    console.log('保存成功');
+                    // 可以显示成功提示
+                } else {
+                    throw new Error('保存失败');
+                }
+            } catch (error) {
+                console.error('保存安全审查命令配置失败:', error);
+                alert('保存失败: ' + error.message);
+            }
+        }
+
+        // 显示指定部分
+        function showSection(sectionName) {
+            // 隐藏所有 section
+            const sections = document.querySelectorAll('.section');
+            sections.forEach(section => {
+                section.classList.remove('active');
+            });
+
+            // 移除所有导航按钮的 active 状态
+            const navBtns = document.querySelectorAll('.nav-btn');
+            navBtns.forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // 显示选中的 section
+            switch(sectionName) {
+                case 'results':
+                    document.getElementById('resultsSection').classList.add('active');
+                    break;
+                case 'security-review':
+                    document.getElementById('securityReviewSection').classList.add('active');
+                    break;
+                case 'custom-filtering':
+                    document.getElementById('customFilteringSection').classList.add('active');
+                    break;
+                case 'custom-scan':
+                    document.getElementById('customScanSection').classList.add('active');
+                    break;
+                case 'usage':
+                    document.getElementById('usageSection').classList.add('active');
+                    break;
+            }
+
+            // 激活对应的导航按钮
+            event.target.classList.add('active');
+        }
+
+        // 初始化示例内容
+        function initExamples() {
+            document.getElementById('customFilteringExample').textContent = originalCustomFilteringExample;
+            document.getElementById('customScanExample').textContent = originalCustomScanExample;
+        }
+
+        // 编辑自定义过滤示例
+        function editCustomFilteringExample() {
+            showEditModal('customFiltering', originalCustomFilteringExample);
+        }
+
+        // 编辑自定义扫描示例
+        function editCustomScanExample() {
+            showEditModal('customScan', originalCustomScanExample);
+        }
+
+        // 显示编辑模态框
+        function showEditModal(type, content) {
+            const modal = document.createElement('div');
+            modal.className = 'edit-modal active';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3>${type === 'customFiltering' ? '编辑自定义过滤示例' : '编辑自定义安全扫描示例'}</h3>
+                    <textarea id="editTextArea">${content}</textarea>
+                    <div class="modal-buttons">
+                        <button class="save-btn" onclick="saveEditModal('${type}')">保存</button>
+                        <button class="cancel-btn" onclick="closeEditModal()">取消</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        // 保存编辑
+        function saveEditModal(type) {
+            const textArea = document.getElementById('editTextArea');
+            const newContent = textArea.value;
+
+            if (type === 'customFiltering') {
+                originalCustomFilteringExample = newContent;
+                document.getElementById('customFilteringExample').textContent = newContent;
+            } else {
+                originalCustomScanExample = newContent;
+                document.getElementById('customScanExample').textContent = newContent;
+            }
+
+            closeEditModal();
+        }
+
+        // 关闭编辑模态框
+        function closeEditModal() {
+            const modal = document.querySelector('.edit-modal');
+            if (modal) {
+                modal.remove();
+            }
+        }
 
         // 加载所有评估结果
         async function loadAllResults() {

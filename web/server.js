@@ -78,8 +78,15 @@ function parseAllResults() {
 const server = http.createServer((req, res) => {
     // 设置CORS头
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // 处理预检请求
+    if (req.method === 'OPTIONS') {
+        res.statusCode = 200;
+        res.end();
+        return;
+    }
 
     // 路由处理
     if (req.method === 'GET') {
@@ -88,6 +95,79 @@ const server = http.createServer((req, res) => {
             const results = parseAllResults();
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify(results, null, 2));
+            return;
+        }
+
+        // 获取文档内容
+        if (req.url.startsWith('/api/docs/custom-filtering')) {
+            const docsPath = path.join(__dirname, '../docs/custom-filtering-instructions.md');
+            console.log('Looking for docs at:', docsPath);
+            if (fs.existsSync(docsPath)) {
+                const content = fs.readFileSync(docsPath, 'utf8');
+                res.setHeader('Content-Type', 'text/plain');
+                res.end(content);
+            } else {
+                res.statusCode = 404;
+                res.end('Not Found');
+            }
+            return;
+        }
+
+        if (req.url.startsWith('/api/docs/custom-scan')) {
+            const docsPath = path.join(__dirname, '../docs/custom-security-scan-instructions.md');
+            console.log('Looking for docs at:', docsPath);
+            if (fs.existsSync(docsPath)) {
+                const content = fs.readFileSync(docsPath, 'utf8');
+                res.setHeader('Content-Type', 'text/plain');
+                res.end(content);
+            } else {
+                res.statusCode = 404;
+                res.end('Not Found');
+            }
+            return;
+        }
+
+        // 获取示例内容
+        if (req.url.startsWith('/api/examples/custom-filtering')) {
+            const examplesPath = path.join(__dirname, '../examples/custom-false-positive-filtering.txt');
+            console.log('Looking for examples at:', examplesPath);
+            if (fs.existsSync(examplesPath)) {
+                const content = fs.readFileSync(examplesPath, 'utf8');
+                res.setHeader('Content-Type', 'text/plain');
+                res.end(content);
+            } else {
+                res.statusCode = 404;
+                res.end('Not Found');
+            }
+            return;
+        }
+
+        if (req.url.startsWith('/api/examples/custom-scan')) {
+            const examplesPath = path.join(__dirname, '../examples/custom-security-scan-instructions.txt');
+            console.log('Looking for examples at:', examplesPath);
+            if (fs.existsSync(examplesPath)) {
+                const content = fs.readFileSync(examplesPath, 'utf8');
+                res.setHeader('Content-Type', 'text/plain');
+                res.end(content);
+            } else {
+                res.statusCode = 404;
+                res.end('Not Found');
+            }
+            return;
+        }
+
+        // 获取 security-review 命令配置
+        if (req.url.startsWith('/api/security-review')) {
+            const commandPath = path.join(__dirname, '../.claude/commands/security-review.md');
+            console.log('Looking for security-review command at:', commandPath);
+            if (fs.existsSync(commandPath)) {
+                const content = fs.readFileSync(commandPath, 'utf8');
+                res.setHeader('Content-Type', 'text/plain');
+                res.end(content);
+            } else {
+                res.statusCode = 404;
+                res.end('Not Found');
+            }
             return;
         }
 
@@ -100,6 +180,74 @@ const server = http.createServer((req, res) => {
                 res.end(content);
                 return;
             }
+        }
+    } else if (req.method === 'POST') {
+        // 保存编辑后的示例内容
+        if (req.url === '/api/examples/custom-filtering') {
+            let body = '';
+            req.on('data', chunk => {
+                body += chunk.toString();
+            });
+            req.on('end', () => {
+                try {
+                    const data = JSON.parse(body);
+                    const examplesPath = path.join(__dirname, '../examples/custom-false-positive-filtering.txt');
+                    fs.writeFileSync(examplesPath, data.content, 'utf8');
+                    res.statusCode = 200;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ success: true }));
+                } catch (error) {
+                    console.error('保存文件失败:', error);
+                    res.statusCode = 500;
+                    res.end('Internal Server Error');
+                }
+            });
+            return;
+        }
+
+        if (req.url === '/api/examples/custom-scan') {
+            let body = '';
+            req.on('data', chunk => {
+                body += chunk.toString();
+            });
+            req.on('end', () => {
+                try {
+                    const data = JSON.parse(body);
+                    const examplesPath = path.join(__dirname, '../examples/custom-security-scan-instructions.txt');
+                    fs.writeFileSync(examplesPath, data.content, 'utf8');
+                    res.statusCode = 200;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ success: true }));
+                } catch (error) {
+                    console.error('保存文件失败:', error);
+                    res.statusCode = 500;
+                    res.end('Internal Server Error');
+                }
+            });
+            return;
+        }
+
+        // 保存 security-review 命令配置
+        if (req.url === '/api/security-review') {
+            let body = '';
+            req.on('data', chunk => {
+                body += chunk.toString();
+            });
+            req.on('end', () => {
+                try {
+                    const data = JSON.parse(body);
+                    const commandPath = path.join(__dirname, '../.claude/commands/security-review.md');
+                    fs.writeFileSync(commandPath, data.content, 'utf8');
+                    res.statusCode = 200;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ success: true }));
+                } catch (error) {
+                    console.error('保存文件失败:', error);
+                    res.statusCode = 500;
+                    res.end('Internal Server Error');
+                }
+            });
+            return;
         }
     }
 
